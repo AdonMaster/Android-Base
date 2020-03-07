@@ -1,0 +1,4 @@
+rootProject.name='BaseExample'
+include ':app'
+include ':task'
+include ':promise'
