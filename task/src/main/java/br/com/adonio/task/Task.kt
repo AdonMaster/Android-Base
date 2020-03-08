@@ -2,15 +2,20 @@
 
 package br.com.adonio.task
 
-import android.os.Handler
-import android.os.Looper
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.GlobalScope
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 object Task {
 
     private val debounces by lazy<MutableList<String>> { mutableListOf() }
 
-    fun main(delay: Long = 0, closure: ()->Unit): Boolean {
-        return Handler(Looper.getMainLooper()).postDelayed(closure, delay)
+    fun main(delayInMilliSeconds: Long = 0, closure: ()->Unit) {
+        GlobalScope.launch(Dispatchers.Main) {
+            delay(delayInMilliSeconds)
+            closure()
+        }
     }
 
     fun debounce(key: String, interval: Long, cb: ()->Unit) {
