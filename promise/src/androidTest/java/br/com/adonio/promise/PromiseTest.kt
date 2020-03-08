@@ -2,11 +2,9 @@ package br.com.adonio.promise
 
 import br.com.adonio.task.Task
 import org.junit.Assert.*
-import org.junit.FixMethodOrder
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.junit.runners.JUnit4
-import org.junit.runners.MethodSorters
 import java.util.concurrent.CountDownLatch
 
 @RunWith(JUnit4::class)
@@ -44,7 +42,7 @@ class PromiseTest {
         var outsider = 44
         var doner = 44
 
-        Promise<Boolean>(157) {
+        Promise<Boolean>(278) {
             outsider = 25
             reject("adon")
             reject("simple")
@@ -224,24 +222,26 @@ class PromiseTest {
         var ff = 0
 
         chain(
-            { resolve(2) },
+            { chainResolve(2) },
             {
                 assertEquals(2, getPriorValue())
 
-                resolve("sacana")
+                chainResolveAndHalt("sacana")
+
+                fail("not here")
             },
             {
                 assertEquals("sacana", getPriorValue())
 
                 assertEquals(0, ff)
                 ff++
-                resolve(1)
+                chainResolve(1)
             },
             {
                 assertEquals(1, getPriorValue())
 
                 assertEquals(1, ff)
-                resolve(1)
+                chainResolve(1)
             }
         )
             .then {
@@ -266,13 +266,13 @@ class PromiseTest {
         var rejected = ""
 
         chain(
-            { resolve(66) },
+            { chainResolve(66) },
             {
 
                 assertEquals(66, getPriorValue())
 
                 Task.main(500) {
-                    reject("kpeta")
+                    chainReject("kpeta")
                 }
             },
             { fail("not here") }
@@ -290,6 +290,32 @@ class PromiseTest {
         cc.await()
 
         assertEquals("kpeta", rejected)
+    }
+
+    @Test
+    fun testChainPromises() {
+        val cc = CountDownLatch(1)
+        var ii = 0
+        chain(
+            { promiseIt(44).chain(this) },
+            {
+                ii ++
+                assertEquals(44, getPriorValue())
+                chainResolveAndHalt("data")
+
+                fail("not here")
+            }
+        ).then {
+            assertEquals(1, ii)
+            assertEquals("data", it[1])
+        }.always {
+            ii++
+            cc.countDown()
+        }
+
+        cc.await()
+
+        assertEquals(2, ii)
     }
 
 }

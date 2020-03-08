@@ -10,6 +10,6 @@ allprojects {
 ```
 ---
 ```
-implementation 'com.github.AdonMaster.Android-Base:task:0.3.4'
-implementation 'com.github.AdonMaster.Android-Base:promise:0.3.4'
+implementation 'com.github.AdonMaster.Android-Base:task:0.3.5'
+implementation 'com.github.AdonMaster.Android-Base:promise:0.3.5'
 ```

@@ -115,6 +115,11 @@ class Promise<T>(delay: Long=0, private val cb: Dsl<T>.()->Unit) {
     //
     class HaltException: Exception("halt")
 
+    //
+    fun chain(dsl: PromiseChain.Dsl) {
+        then { dsl.chainResolve(it as Any) }.catch { dsl.chainReject(it) }
+    }
+
 }
 
 fun <T> promise(delay: Long = 0, cb: Promise.Dsl<T>.()->Unit): Promise<T> {
@@ -128,57 +133,65 @@ fun <T> promiseIt(value: T?, delay: Long=0): Promise<T> {
     }
 }
 
+//
 
 class PromiseChain(private vararg val list: Dsl.()->Unit) {
+
     private val r = arrayListOf<Any>()
 
-    fun build() = Promise<List<Any>> {
-        callNext(this, 0)
+    fun build() = promise<List<Any>> {
+        next(0, null, this)
     }
 
-    private fun callNext(dsl: Promise.Dsl<List<Any>>, index: Int) {
-        val p = list.getOrNull(index)
-        if (p == null) {
-
-            dsl.resolve(r)
-
+    private fun next(position: Int, prior: Any?, fatherDsl: Promise.Dsl<List<Any>>) {
+        val cb = list.getOrNull(position)
+        if (cb==null) {
+            fatherDsl.resolve(r)
         } else {
-            val priorValue = r.getOrNull(index - 1)
 
-            val innerDsl = Dsl(
-                priorValue,
-                promise<Any> {}
-                    .then {
-
-                        r.add(it)
-                        callNext(dsl, index + 1)
-
-                    }.catch {
-                        dsl.reject(it)
-                    }
-            )
-
-            // call
             try {
-                p(innerDsl)
+
+                cb(Dsl(prior, {
+
+                    r.add(it)
+                    next(position + 1, it, fatherDsl)
+
+                }, {
+                    fatherDsl.reject(it)
+                }))
+
             } catch (e: Promise.HaltException) {
-                //
-            } catch (e: Exception) {
-                dsl.reject(e.localizedMessage)
+                // I have to catch this... otherwise the father promise will do it,
+                // and halt everything while accumulating results
             }
+
         }
     }
 
-    //
-
-    class Dsl(private var prior: Any?, promise: Promise<Any>): Promise.Dsl<Any>(promise) {
+    class Dsl(private val prior: Any?, private val cbResolve: (Any)->Unit, private val cbReject: (String)->Unit) {
+        fun chainResolve(value: Any) {
+            cbResolve(value)
+        }
+        fun chainResolveAndHalt(value: Any) {
+            chainResolve(value)
+            throw Promise.HaltException()
+        }
+        fun chainReject(reason: String) {
+            cbReject(reason)
+        }
+        fun chainRejectAndHalt(reason: String) {
+            chainReject(reason)
+            throw Promise.HaltException()
+        }
+        @Suppress("UNCHECKED_CAST")
         fun <T> getPriorValue(): T {
-            @Suppress("UNCHECKED_CAST")
             return prior as T
         }
     }
+
 }
 
-fun chain(vararg dsls: PromiseChain.Dsl.()->Unit): Promise<List<Any>> {
-    return PromiseChain(*dsls).build()
+
+fun chain(vararg dslList: PromiseChain.Dsl.()->Unit): Promise<List<Any>> {
+    return PromiseChain(*dslList).build()
 }
