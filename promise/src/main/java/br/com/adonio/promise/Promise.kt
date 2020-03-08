@@ -161,6 +161,8 @@ class PromiseChain(private vararg val list: Dsl.()->Unit) {
             // call
             try {
                 p(innerDsl)
+            } catch (e: Promise.HaltException) {
+                //
             } catch (e: Exception) {
                 dsl.reject(e.localizedMessage)
             }
@@ -171,6 +173,7 @@ class PromiseChain(private vararg val list: Dsl.()->Unit) {
 
     class Dsl(private var prior: Any?, promise: Promise<Any>): Promise.Dsl<Any>(promise) {
         fun <T> getPriorValue(): T {
+            @Suppress("UNCHECKED_CAST")
             return prior as T
         }
     }
