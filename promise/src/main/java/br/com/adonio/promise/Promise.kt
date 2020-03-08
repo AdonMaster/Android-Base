@@ -34,7 +34,9 @@ class Promise<T>(delay: Long=0, private val cb: Dsl<T>.()->Unit) {
         wasStarted = true
 
         try {
+
             cb(Dsl(this))
+
         } catch (e: HaltException) {
             doner?.invoke()
         } catch (e: Exception) {
@@ -88,7 +90,7 @@ class Promise<T>(delay: Long=0, private val cb: Dsl<T>.()->Unit) {
     }
 
     //
-    class Dsl<T>(private val promise: Promise<T>) {
+    open class Dsl<T>(private val promise: Promise<T>) {
 
         fun resolve(value: T) {
             promise.resolver?.invoke(value)
@@ -126,42 +128,50 @@ fun <T> promiseIt(value: T?, delay: Long=0): Promise<T> {
     }
 }
 
-class PromiseChain(vararg promises: Promise<Any>) {
-    private val r = arrayListOf<Any>()
-    private val list: List<Promise<Any>>
 
-    init {
-        for (p in promises) {
-            p.suspended()
-        }
-        list = promises.toList()
-    }
+class PromiseChain(private vararg val list: Dsl.()->Unit) {
+    private val r = arrayListOf<Any>()
 
     fun build() = Promise<List<Any>> {
-        callNext(0, this)
+        callNext(this, 0)
     }
 
-    private fun callNext(index: Int, dsl: Promise.Dsl<List<Any>>) {
+    private fun callNext(dsl: Promise.Dsl<List<Any>>, index: Int) {
         val p = list.getOrNull(index)
         if (p == null) {
 
             dsl.resolve(r)
 
         } else {
+            val priorValue = r.getOrNull(index - 1)
 
-            p.then {
+            val innerDsl = Dsl(
+                priorValue,
+                promise<Any> {}
+                    .then {
 
-                r.add(it)
-                callNext(index + 1, dsl)
+                        r.add(it)
+                        callNext(dsl, index + 1)
 
-            }.catch {
-                dsl.reject(it)
-            }.start()
+                    }.catch {
+                        dsl.reject(it)
+                    }
+            )
 
+            // call
+            p(innerDsl)
+        }
+    }
+
+    //
+
+    class Dsl(private var prior: Any?, promise: Promise<Any>): Promise.Dsl<Any>(promise) {
+        fun <T> getPriorValue(): T {
+            return prior as T
         }
     }
 }
 
-fun chain(vararg promises: Promise<Any>): Promise<List<Any>> {
-    return PromiseChain(*promises).build()
+fun chain(vararg dsls: PromiseChain.Dsl.()->Unit): Promise<List<Any>> {
+    return PromiseChain(*dsls).build()
 }

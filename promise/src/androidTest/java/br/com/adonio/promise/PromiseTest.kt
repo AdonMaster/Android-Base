@@ -156,7 +156,7 @@ class PromiseTest {
         val count = CountDownLatch(1)
 
         promise<Int>(250) {
-            @Suppress("DIVISION_BY_ZERO")
+            @Suppress("DIVISION_BY_ZERO", "UNUSED_VARIABLE")
             val d = 4 / 0
 
             fail("not here")
@@ -224,14 +224,22 @@ class PromiseTest {
         var ff = 0
 
         chain(
-            promiseIt(2, 202),
-            promiseIt("sacana", 158),
-            promise(200) {
+            { resolve(2) },
+            {
+                assertEquals(2, getPriorValue())
+
+                resolve("sacana")
+            },
+            {
+                assertEquals("sacana", getPriorValue())
+
                 assertEquals(0, ff)
                 ff++
                 resolve(1)
             },
-            promise(358) {
+            {
+                assertEquals(1, getPriorValue())
+
                 assertEquals(1, ff)
                 resolve(1)
             }
@@ -258,15 +266,16 @@ class PromiseTest {
         var rejected = ""
 
         chain(
-            promiseIt(66, 300),
-            promise(400) {
+            { resolve(66) },
+            {
+
+                assertEquals(66, getPriorValue())
+
                 Task.main(500) {
                     reject("kpeta")
                 }
             },
-            promise(600) {
-                fail("not here")
-            }
+            { fail("not here") }
         )
             .then {
                 fail("not here")
