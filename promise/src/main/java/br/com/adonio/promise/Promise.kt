@@ -159,7 +159,11 @@ class PromiseChain(private vararg val list: Dsl.()->Unit) {
             )
 
             // call
-            p(innerDsl)
+            try {
+                p(innerDsl)
+            } catch (e: Exception) {
+                dsl.reject(e.localizedMessage)
+            }
         }
     }
 
