@@ -1,9 +1,12 @@
 package br.com.adonio.promise
 
+import br.com.adonio.task.Task
 import org.junit.Assert.*
+import org.junit.FixMethodOrder
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.junit.runners.JUnit4
+import org.junit.runners.MethodSorters
 import java.util.concurrent.CountDownLatch
 
 @RunWith(JUnit4::class)
@@ -41,7 +44,7 @@ class PromiseTest {
         var outsider = 44
         var doner = 44
 
-        Promise<Boolean>(150) {
+        Promise<Boolean>(157) {
             outsider = 25
             reject("adon")
             reject("simple")
@@ -183,6 +186,101 @@ class PromiseTest {
             .always { count.countDown() }
 
         count.await()
+    }
+
+    @Test
+    fun testSuspended() {
+        val cc = CountDownLatch(2)
+        var re = 0
+        val p = promise<Int>(195) {
+                re++
+                resolve(552)
+            }
+            .suspended()
+            .then {
+                assertEquals(552, it)
+            }
+            .always {
+                cc.countDown()
+            }
+
+        //
+        Task.main(411) {
+            assertEquals(0, re)
+
+            re++
+            cc.countDown()
+
+            p.start()
+        }
+
+        cc.await()
+        assertEquals(2, re)
+    }
+
+    @Test
+    fun testChain() {
+        val cc = CountDownLatch(1)
+        var ff = 0
+
+        chain(
+            promiseIt(2, 202),
+            promiseIt("sacana", 158),
+            promise(200) {
+                assertEquals(0, ff)
+                ff++
+                resolve(1)
+            },
+            promise(358) {
+                assertEquals(1, ff)
+                resolve(1)
+            }
+        )
+            .then {
+                assertEquals(2, it[0])
+                assertEquals("sacana", it[1])
+                assertEquals(1, it[2])
+                assertEquals(1, it[3])
+            }
+            .catch {
+                fail("not here")
+            }
+            .always {
+                cc.countDown()
+            }
+
+        cc.await()
+    }
+
+    @Test
+    fun testChainReject() {
+        val cc = CountDownLatch(1)
+        var rejected = ""
+
+        chain(
+            promiseIt(66, 300),
+            promise(400) {
+                Task.main(500) {
+                    reject("kpeta")
+                }
+            },
+            promise(600) {
+                fail("not here")
+            }
+        )
+            .then {
+                fail("not here")
+            }
+            .catch {
+                rejected = it
+            }
+            .always {
+                cc.countDown()
+            }
+
+        cc.await()
+
+        assertEquals("kpeta", rejected)
     }
 
 }
