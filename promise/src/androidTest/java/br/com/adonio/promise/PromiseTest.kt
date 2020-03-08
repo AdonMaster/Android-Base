@@ -10,96 +10,179 @@ import java.util.concurrent.CountDownLatch
 class PromiseTest {
 
     @Test
-    fun testBase() {
+    fun testResolver() {
         val semaphore = CountDownLatch(1)
         var outsider = 44
         var doner = 44
 
-        Promise<Boolean>(200) { resolve, _ ->
-                resolve(false)
-            }
-            .then {
-                outsider = 221
-                assertFalse(it)
-            }
-            .always {
-                doner = 255
-                semaphore.countDown()
-            }
+        Promise<Boolean>(250) {
+            outsider = 25
+            resolve(false)
+            resolve(true)
+        }.then {
+            outsider++
+            assertFalse(it)
+        }.catch {
+            fail("Not here")
+        }.always {
+            doner = 55
+            semaphore.countDown()
+        }
 
         semaphore.await()
 
-        assertEquals(221, outsider)
-        assertEquals(255, doner)
+        assertEquals(26, outsider)
+        assertEquals(55, doner)
+    }
+
+    @Test
+    fun testRejector() {
+        val semaphore = CountDownLatch(1)
+        var outsider = 44
+        var doner = 44
+
+        Promise<Boolean>(150) {
+            outsider = 25
+            reject("adon")
+            reject("simple")
+            outsider++
+        }.then {
+            fail("not here")
+        }.catch {
+            outsider++
+            assertEquals("adon", it)
+        }.always {
+            doner = 55
+            semaphore.countDown()
+        }
+
+        semaphore.await()
+
+        assertEquals(27, outsider)
+        assertEquals(55, doner)
     }
 
     @Test
     fun testAlways() {
         val semaphore = CountDownLatch(1)
+        var doner = 44
 
-        Promise<Boolean>(200) { resolve, reject ->
-            resolve(true)
+        Promise<Boolean>(250) {
+            reject("adon")
         }.always {
-            assertTrue(true)
+            doner++
             semaphore.countDown()
         }
 
         semaphore.await()
+
+        assertEquals(45, doner)
     }
 
     @Test
-    fun testHaltResolve() {
+    fun testFun() {
         val semaphore = CountDownLatch(1)
+        var jj = 1
 
-        Promise<Boolean>(200) { resolve, reject ->
-                resolve(true)
-
-                fail("não pode ser executada essa linha")
-
-                reject("tro lo lo")
-            }
-            .then {
-                assertTrue(it)
-            }
-            .catch {
-                fail("não pode ser executada catch")
-            }
-            .always {
-                semaphore.countDown()
-            }
+        promise<String>(250) {
+            jj++
+            resolve("2")
+            resolve("5")
+        }.then {
+            assertEquals("2", it)
+            jj++
+        }.always {
+            semaphore.countDown()
+        }
 
         semaphore.await()
+
+        assertEquals(3, jj)
     }
 
     @Test
-    fun testHaltReject() {
-        val semaphore = CountDownLatch(1)
+    fun testResolveAndHalt() {
+        val sem = CountDownLatch(1)
+        var jar = 452
 
-        var cc = 0
-        Promise<Boolean>(200) { _, reject ->
-                cc = 1
-                reject("rapaz")
+        promise<Boolean>(250) {
+            jar++
+            resolveAndHalt(true)
+            fail("not here")
+            jar++
+        }.then {
+            assertEquals(453, jar)
+            assertTrue(it)
+        }.catch {
+            fail("not here")
+        }.always {
+            jar++
+            sem.countDown()
+        }
 
-                fail("não pode ser executada essa linha")
+        sem.await()
+        assertEquals(454, jar)
+    }
 
-                reject("tro lo lo")
-            }
-            .then {
-                cc = 3
-                fail("esta linha não pode ser executada")
-            }
-            .catch {
-                assertEquals(1, cc)
-                cc = 2
-                assertEquals("rapaz", it)
-            }
-            .always {
-                cc = 4
-                semaphore.countDown()
-            }
+    @Test
+    fun testRejectAndHalt() {
+        val sem = CountDownLatch(1)
+        var jar = 452
 
-        semaphore.await()
-        assertEquals(4, cc)
+        promise<Boolean>(250) {
+            jar++
+            rejectAndHalt("true")
+            fail("not here")
+            jar++
+        }.then {
+            fail("not here")
+        }.catch {
+            assertEquals(453, jar)
+            assertEquals("true", it)
+        }.always {
+            jar++
+            sem.countDown()
+        }
+
+        sem.await()
+        assertEquals(454, jar)
+    }
+
+    @Test
+    fun testException() {
+        val count = CountDownLatch(1)
+
+        promise<Int>(250) {
+            @Suppress("DIVISION_BY_ZERO")
+            val d = 4 / 0
+
+            fail("not here")
+        }.catch {
+            assertEquals("divide by zero", it)
+        }.always {
+            count.countDown()
+        }
+
+        count.await()
+    }
+
+    @Test
+    fun testFunVariable() {
+        val count = CountDownLatch(2)
+        var r: String? = null
+
+        promiseIt(r, 199)
+            .then { fail("not here") }
+            .catch { assertEquals("null", it) }
+            .always { count.countDown() }
+
+        r = "sourcing"
+        promiseIt(r, 157)
+            .then { assertEquals("sourcing", it) }
+            .catch { fail("not here") }
+            .always { count.countDown() }
+
+        count.await()
     }
 
 }

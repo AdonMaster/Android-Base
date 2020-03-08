@@ -4,71 +4,107 @@ package br.com.adonio.promise
 
 import br.com.adonio.task.Task
 
-class Promise<V>(private val delay: Long=0, private val cb: ((V) -> Unit, (String) -> Unit) -> Unit) {
+class Promise<T>(delay: Long=0, cb: Dsl<T>.()->Unit) {
 
-    private var resolver: (V)->Unit = {}
-    private var rejector: (String)->Unit = {}
-    private var doner: (()->Unit)? = null
+    private var resolver: ((T)->Unit)?= null
+    private var rejector: ((String)->Unit)?=null
+    private var doner: (()->Unit)?=null
 
-    private var resolverDefined = false
-    private var rejectorDefined = false
+    private var wasResolved = false
+    private var wasRejected = false
+    private var wasDone = false
+
+    private var resolverAssigned = false
+    private var rejectorAssigned = false
 
     init {
-        start()
-    }
-
-    private fun start() {
         Task.main(delay) {
+
             try {
-
-                cb(resolver, rejector)
-
-                if (!resolverDefined && !rejectorDefined) {
-                    doner?.invoke()
-                }
-
-            } catch (e: PromiseHaltException) {
+                cb(Dsl(this))
+            } catch (e: HaltException) {
                 doner?.invoke()
             } catch (e: Exception) {
-                rejector(e.localizedMessage)
+                rejector?.invoke(e.localizedMessage)
+            }
+
+            if (!resolverAssigned && !rejectorAssigned) {
+                doner?.invoke()
             }
         }
     }
 
-    fun then(cb: (V)->Unit): Promise<V> {
-        resolverDefined = true
+    fun then(cb: (T)->Unit): Promise<T> {
+        resolverAssigned = true
         resolver = {
-            cb(it)
-            throw PromiseHaltException()
+            if (!wasResolved) {
+                wasResolved = true
+                cb(it)
+
+                doner?.invoke()
+            }
         }
         return this
     }
 
-    fun catch(cb: (String)->Unit): Promise<V> {
-        rejectorDefined = true
+    fun catch(cb: (String)->Unit): Promise<T> {
+        rejectorAssigned = true
         rejector = {
-            cb(it)
-            throw PromiseHaltException()
+            if (!wasRejected) {
+                wasRejected = true
+                cb(it)
+
+                doner?.invoke()
+            }
         }
         return this
     }
 
-    fun always(cb: ()->Unit) {
-        doner = cb
+    fun always(cb: ()->Unit): Promise<T> {
+        doner = {
+            if (!wasDone) {
+                wasDone = true
+                cb()
+            }
+        }
+        return this
     }
+
+    //
+    class Dsl<T>(private val promise: Promise<T>) {
+
+        fun resolve(value: T) {
+            promise.resolver?.invoke(value)
+        }
+
+        fun resolveAndHalt(value: T) {
+            resolve(value)
+            throw HaltException()
+        }
+
+        fun reject(reason: String) {
+            promise.rejector?.invoke(reason)
+        }
+
+        fun rejectAndHalt(reason: String) {
+            reject(reason)
+            throw HaltException()
+        }
+
+    }
+
+    //
+    class HaltException: Exception("halt")
 
 }
 
-class PromiseHaltException: Exception("PromiseHaltException")
+fun <T> promise(delay: Long = 0, cb: Promise.Dsl<T>.()->Unit): Promise<T> {
+    return Promise(delay, cb)
+}
 
-fun <T> promiseIt(obj: T?) = Promise<T> { resolve, reject ->
-    try {
-        if (obj!=null) {
-            resolve(obj)
-        } else {
-            reject("objeto vazio")
-        }
-    } catch(e: Exception) {
-        reject(e.localizedMessage)
+fun <T> promiseIt(value: T?, delay: Long=0): Promise<T> {
+    return promise(delay) {
+        value?.let { resolveAndHalt(it) }
+        reject("null")
     }
 }
